@@ -10,11 +10,11 @@ export const PresencePanel = ({ roomState, currentPlayer }: PresencePanelProps) 
     <section className="panel">
       <div className="panel-heading">
         <p className="eyebrow">Presence</p>
-        <h2>Who is in the scene</h2>
+        <h2>Players</h2>
       </div>
 
       {!roomState ? (
-        <p className="muted-text">Participant presence is shown after you connect to a room.</p>
+        <p className="muted-text">Players appear here after you connect.</p>
       ) : (
         <div className="participant-stack">
           {roomState.participantOrder.map((participantId) => {
@@ -30,11 +30,11 @@ export const PresencePanel = ({ roomState, currentPlayer }: PresencePanelProps) 
                     {participant.displayName}
                     {participant.id === currentPlayer?.id ? ' (You)' : ''}
                   </strong>
-                  <span>{participant.alignment.instructions}</span>
+                  <span>{participant.isHost ? 'Host' : 'Participant'}</span>
                 </div>
                 <div className="presence-meta">
                   <span>{participant.ready ? 'Ready' : 'Not ready'}</span>
-                  <span>{participant.presence.heldObjectId ? `Holding ${participant.presence.heldObjectId}` : 'Hands free'}</span>
+                  <span>{participant.alignment.status}</span>
                 </div>
               </div>
             );

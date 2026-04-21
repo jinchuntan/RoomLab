@@ -1,15 +1,18 @@
-import type { RoomState } from '../../../shared/src';
+import { getLessonDefinition, type RoomState } from '../../../shared/src';
 
 interface ScoreboardPanelProps {
   roomState: RoomState | null;
 }
 
 export const ScoreboardPanel = ({ roomState }: ScoreboardPanelProps) => {
+  const lesson = roomState ? getLessonDefinition(roomState.lessonId) : null;
+  const challenge = roomState && lesson ? lesson.challenges[roomState.lesson.currentChallengeIndex] : null;
+
   return (
     <section className="panel">
       <div className="panel-heading">
-        <p className="eyebrow">Score</p>
-        <h2>Shared progress</h2>
+        <p className="eyebrow">Progress</p>
+        <h2>Score</h2>
       </div>
 
       <div className="score-hero">
@@ -21,16 +24,18 @@ export const ScoreboardPanel = ({ roomState }: ScoreboardPanelProps) => {
         <>
           <div className="meta-grid">
             <div>
-              <span className="meta-label">Current round</span>
+              <span className="meta-label">Round</span>
               <strong>{roomState.lesson.currentRound || 0}</strong>
             </div>
             <div>
               <span className="meta-label">Challenge</span>
-              <strong>{roomState.lesson.currentChallengeId ?? 'Not started'}</strong>
+              <strong>{challenge?.title ?? 'Not started'}</strong>
             </div>
             <div>
-              <span className="meta-label">Version</span>
-              <strong>{roomState.version}</strong>
+              <span className="meta-label">Complete</span>
+              <strong>
+                {roomState.lesson.completedChallengeIds.length}/{lesson?.challenges.length ?? 0}
+              </strong>
             </div>
           </div>
 
@@ -45,7 +50,7 @@ export const ScoreboardPanel = ({ roomState }: ScoreboardPanelProps) => {
                 <div className="participant-row" key={participantId}>
                   <div>
                     <strong>{participant.displayName}</strong>
-                    <span>{participant.isHost ? 'Host contribution' : 'Contribution'}</span>
+                    <span>{participant.isHost ? 'Host' : 'Player'}</span>
                   </div>
                   <strong>{roomState.score.perPlayer[participantId] ?? 0}</strong>
                 </div>
@@ -54,7 +59,7 @@ export const ScoreboardPanel = ({ roomState }: ScoreboardPanelProps) => {
           </div>
         </>
       ) : (
-        <p className="muted-text">Room score appears here once the session is active.</p>
+        <p className="muted-text">Score appears here once the room starts.</p>
       )}
     </section>
   );

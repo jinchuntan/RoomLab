@@ -11,12 +11,12 @@ export const getConnectedPlayerIds = (state: RoomState): string[] => getConnecte
 
 export const allConnectedPlayersReady = (state: RoomState): boolean => {
   const players = getConnectedPlayers(state);
-  return players.length >= 2 && players.every((player) => player.ready);
+  return players.length >= 1 && players.every((player) => player.ready);
 };
 
 export const allConnectedPlayersAligned = (state: RoomState): boolean => {
   const players = getConnectedPlayers(state);
-  return players.length >= 2 && players.every((player) => player.alignment.status === 'aligned');
+  return players.length >= 1 && players.every((player) => player.alignment.status === 'aligned');
 };
 
 export const getCurrentChallengeDefinitionFromState = (state: RoomState, lesson: LessonDefinition) =>

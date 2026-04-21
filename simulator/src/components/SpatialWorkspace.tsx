@@ -27,6 +27,33 @@ const toSharedPosition = (clientX: number, clientY: number, bounds: DOMRect) => 
   z: (clientY - bounds.top - ORIGIN_Y) / METERS_TO_PIXELS,
 });
 
+const findNearestSlotId = (
+  activeChallenge: NonNullable<RoomState['lesson']['activeChallenge']> | null | undefined,
+  clientX: number,
+  clientY: number,
+  bounds: DOMRect,
+): string | null => {
+  if (!activeChallenge) {
+    return null;
+  }
+
+  const nearestSlot = activeChallenge.slotOrder
+    .map((slotId) => activeChallenge.slots[slotId])
+    .filter((slot): slot is NonNullable<typeof slot> => Boolean(slot))
+    .map((slot) => {
+      const canvas = toCanvasPoint(slot.transform.position.x, slot.transform.position.z);
+      const dx = canvas.x - (clientX - bounds.left);
+      const dy = canvas.y - (clientY - bounds.top);
+      return {
+        slotId: slot.slotId,
+        distance: Math.sqrt(dx * dx + dy * dy),
+      };
+    })
+    .sort((left, right) => left.distance - right.distance)[0];
+
+  return nearestSlot && nearestSlot.distance < SLOT_THRESHOLD ? nearestSlot.slotId : null;
+};
+
 export const SpatialWorkspace = ({
   roomState,
   currentPlayer,
@@ -37,6 +64,7 @@ export const SpatialWorkspace = ({
 }: SpatialWorkspaceProps) => {
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const dragObjectIdRef = useRef<string | null>(null);
+  const hoverSlotIdRef = useRef<string | null>(null);
   const [hoverSlotId, setHoverSlotId] = useState<string | null>(null);
 
   const activeChallenge = roomState?.lesson.activeChallenge;
@@ -44,10 +72,36 @@ export const SpatialWorkspace = ({
   const challengeDefinition = roomState ? lesson.challenges[roomState.lesson.currentChallengeIndex] : undefined;
   const centralSlotId = activeChallenge?.slotOrder.find((slotId) => activeChallenge.slots[slotId]?.isCentralAtom) ?? null;
   const canInteract = roomState?.phase === 'building' && currentPlayer?.alignment.status === 'aligned';
+  const workspaceSubtitle = challengeDefinition
+    ? `${challengeDefinition.formula} · ${challengeDefinition.geometry} · ${challengeDefinition.bondCount} bonds`
+    : roomState?.phase === 'lessonIntro'
+      ? 'Host can spawn the next molecule.'
+      : 'Start a room to begin.';
 
   useEffect(() => {
-    const handlePointerMove = (event: MouseEvent) => {
+    const releaseDraggedAtom = () => {
+      if (!dragObjectIdRef.current) {
+        return;
+      }
+
+      if (hoverSlotIdRef.current) {
+        onPlace(dragObjectIdRef.current, hoverSlotIdRef.current);
+      } else {
+        onRelease(dragObjectIdRef.current);
+      }
+
+      dragObjectIdRef.current = null;
+      hoverSlotIdRef.current = null;
+      setHoverSlotId(null);
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
       if (!dragObjectIdRef.current || !workspaceRef.current || !canInteract) {
+        return;
+      }
+
+      if (event.pointerType === 'mouse' && event.buttons === 0) {
+        releaseDraggedAtom();
         return;
       }
 
@@ -56,48 +110,21 @@ export const SpatialWorkspace = ({
       const transform = makeTransform(sharedPosition.x, 0, sharedPosition.z);
       onMove(dragObjectIdRef.current, transform);
 
-      if (activeChallenge) {
-        const nearestSlot = activeChallenge.slotOrder
-          .map((slotId) => activeChallenge.slots[slotId])
-          .filter((slot): slot is NonNullable<typeof slot> => Boolean(slot))
-          .map((slot) => {
-            const canvas = toCanvasPoint(slot.transform.position.x, slot.transform.position.z);
-            const dx = canvas.x - (event.clientX - bounds.left);
-            const dy = canvas.y - (event.clientY - bounds.top);
-            return {
-              slot,
-              distance: Math.sqrt(dx * dx + dy * dy),
-            };
-          })
-          .sort((left, right) => left.distance - right.distance)[0];
-
-        setHoverSlotId(nearestSlot && nearestSlot.distance < SLOT_THRESHOLD ? nearestSlot.slot.slotId : null);
-      }
+      const nextHoverSlotId = findNearestSlotId(activeChallenge, event.clientX, event.clientY, bounds);
+      hoverSlotIdRef.current = nextHoverSlotId;
+      setHoverSlotId(nextHoverSlotId);
     };
 
-    const handlePointerUp = () => {
-      if (!dragObjectIdRef.current) {
-        return;
-      }
-
-      if (hoverSlotId) {
-        onPlace(dragObjectIdRef.current, hoverSlotId);
-      } else {
-        onRelease(dragObjectIdRef.current);
-      }
-
-      dragObjectIdRef.current = null;
-      setHoverSlotId(null);
-    };
-
-    window.addEventListener('mousemove', handlePointerMove);
-    window.addEventListener('mouseup', handlePointerUp);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', releaseDraggedAtom);
+    window.addEventListener('pointercancel', releaseDraggedAtom);
 
     return () => {
-      window.removeEventListener('mousemove', handlePointerMove);
-      window.removeEventListener('mouseup', handlePointerUp);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', releaseDraggedAtom);
+      window.removeEventListener('pointercancel', releaseDraggedAtom);
     };
-  }, [activeChallenge, canInteract, hoverSlotId, onMove, onPlace, onRelease]);
+  }, [activeChallenge, canInteract, onMove, onPlace, onRelease]);
 
   return (
     <section className="panel panel-workspace">
@@ -106,11 +133,18 @@ export const SpatialWorkspace = ({
         <h2>{challengeDefinition?.title ?? 'Shared workspace'}</h2>
       </div>
 
-      <p className="muted-text">
-        {challengeDefinition
-          ? `${challengeDefinition.learningGoal} Geometry target: ${challengeDefinition.geometry}.`
-          : 'Room state will render here once the lesson begins.'}
-      </p>
+      <div className="workspace-toolbar">
+        <div className="workspace-tags">
+          {challengeDefinition ? (
+            <>
+              <span className="mini-pill">{challengeDefinition.formula}</span>
+              <span className="mini-pill">{challengeDefinition.geometry}</span>
+              <span className="mini-pill">{challengeDefinition.bondCount} bonds</span>
+            </>
+          ) : null}
+        </div>
+        <p className="muted-text">{workspaceSubtitle}</p>
+      </div>
 
       <div className="workspace" ref={workspaceRef}>
         <div className="workspace-backdrop" />
@@ -189,7 +223,7 @@ export const SpatialWorkspace = ({
                     top: point.y,
                     backgroundColor: atom.colorHex,
                   }}
-                  onMouseDown={(event) => {
+                  onPointerDown={(event) => {
                     if (!isInteractable) {
                       return;
                     }
@@ -217,8 +251,9 @@ export const SpatialWorkspace = ({
       </div>
 
       <div className="workspace-legend">
-        <span>Drag atoms from the tray into highlighted bonding slots.</span>
-        <span>Open a second browser tab to verify that state stays synchronized.</span>
+        <span>Drag atoms into matching slots.</span>
+        <span>Wrong drops snap back to the tray.</span>
+        <span>Open another tab if you want to test sync.</span>
       </div>
     </section>
   );

@@ -414,8 +414,12 @@ export const reduceRoomEvent = (
         state.coLocation.sharedOrigin.establishedBy = event.actorId;
         state.coLocation.sharedOrigin.establishedAt = timestamp;
         state.coLocation.sharedOrigin.transform = event.payload.transform;
-        state.phase = 'alignment';
-        state.coLocation.statusMessage = 'Shared origin established. Ask nearby participants to confirm alignment.';
+        state.coLocation.reAlignmentNeeded = !allConnectedPlayersAligned(state);
+        state.phase = allConnectedPlayersAligned(state) ? 'lessonIntro' : 'alignment';
+        state.coLocation.statusMessage =
+          state.phase === 'lessonIntro'
+            ? 'Shared origin established. Start the lesson when you are ready.'
+            : 'Shared origin established. Ask nearby participants to confirm alignment.';
         addDiagnostic(state, 'info', 'alignment', `${host.displayName} established the shared origin.`, timestamp, {
           playerId: host.id,
         });
@@ -628,6 +632,7 @@ export const reduceRoomEvent = (
         object.ownerId = null;
         object.lifecycle = 'tray';
         object.slotId = null;
+        object.transform = deepClone(object.trayTransform);
         object.revision += 1;
         object.updatedAt = timestamp;
         object.lastUpdatedBy = event.actorId;
@@ -768,7 +773,7 @@ export const reduceRoomEvent = (
           }
         }
 
-        if (getConnectedPlayerIds(state).length < lesson.targetPlayers.min && state.phase !== 'completed') {
+        if (getConnectedPlayerIds(state).length === 0 && state.phase !== 'completed') {
           state.phase = 'alignment';
           state.coLocation.reAlignmentNeeded = true;
           state.coLocation.statusMessage = 'Waiting for enough connected participants to continue the shared lesson.';

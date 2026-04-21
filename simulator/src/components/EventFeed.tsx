@@ -5,16 +5,21 @@ interface EventFeedProps {
 }
 
 export const EventFeed = ({ logs }: EventFeedProps) => {
+  const issueCount = logs.filter((log) => log.level === 'warn' || log.level === 'error').length;
+
   return (
-    <section className="panel">
-      <div className="panel-heading">
-        <p className="eyebrow">Diagnostics</p>
-        <h2>Session and sync trace</h2>
-      </div>
+    <details className="panel diagnostics-panel">
+      <summary className="diagnostics-summary">
+        <div className="summary-heading">
+          <p className="eyebrow">Diagnostics</p>
+          <h2>Debug log</h2>
+        </div>
+        <span className="status-pill">{issueCount > 0 ? `${issueCount} issue${issueCount === 1 ? '' : 's'}` : `${logs.length} events`}</span>
+      </summary>
 
       <div className="event-feed">
         {logs.length === 0 ? (
-          <p className="muted-text">Logs will appear here once the room starts processing events.</p>
+          <p className="muted-text">Logs will show up here if something goes wrong.</p>
         ) : (
           logs.map((log) => (
             <div className={`event-row event-${log.level}`} key={log.id}>
@@ -27,6 +32,6 @@ export const EventFeed = ({ logs }: EventFeedProps) => {
           ))
         )}
       </div>
-    </section>
+    </details>
   );
 };

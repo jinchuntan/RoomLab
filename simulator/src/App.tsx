@@ -1,5 +1,5 @@
 import { useDeferredValue } from 'react';
-import { getLessonDefinition } from '../../shared/src';
+import { getLessonDefinition, type PlayerState, type RoomState } from '../../shared/src';
 import { AlignmentPanel } from './components/AlignmentPanel';
 import { EventFeed } from './components/EventFeed';
 import { PresencePanel } from './components/PresencePanel';
@@ -9,35 +9,95 @@ import { SessionPanel } from './components/SessionPanel';
 import { SpatialWorkspace } from './components/SpatialWorkspace';
 import { useRoomClient } from './hooks/useRoomClient';
 
+const getConnectedPlayerCount = (roomState: RoomState | null): number =>
+  roomState
+    ? roomState.participantOrder.filter(
+        (participantId) => roomState.participants[participantId]?.presence.connectionStatus !== 'disconnected',
+      ).length
+    : 0;
+
+const getAlignedPlayerCount = (roomState: RoomState | null): number =>
+  roomState
+    ? roomState.participantOrder.filter(
+        (participantId) =>
+          roomState.participants[participantId]?.presence.connectionStatus !== 'disconnected' &&
+          roomState.participants[participantId]?.alignment.status === 'aligned',
+      ).length
+    : 0;
+
+const getNextStep = (roomState: RoomState | null, currentPlayer: PlayerState | null): string => {
+  if (!roomState || !currentPlayer) {
+    return 'Pick a name, then host a room or join one.';
+  }
+
+  if (!currentPlayer.ready && (roomState.phase === 'lobby' || roomState.phase === 'alignment')) {
+    return 'Mark yourself ready to continue.';
+  }
+
+  if (roomState.phase === 'alignment' && !roomState.coLocation.sharedOrigin.establishedAt) {
+    return currentPlayer.isHost
+      ? 'Establish the shared origin to unlock the lesson.'
+      : 'Wait for the host to establish the shared origin.';
+  }
+
+  if (roomState.phase === 'alignment' && currentPlayer.alignment.status !== 'aligned') {
+    return 'Confirm alignment once the shared origin looks right.';
+  }
+
+  if (roomState.phase === 'lessonIntro') {
+    return currentPlayer.isHost ? 'Spawn the next molecule when you are ready.' : 'Waiting for the host to start the lesson.';
+  }
+
+  if (roomState.phase === 'building') {
+    return 'Drag each atom into the matching slot.';
+  }
+
+  if (roomState.phase === 'roundComplete') {
+    return currentPlayer.isHost ? 'Start the quiz to continue.' : 'Waiting for the host to start the quiz.';
+  }
+
+  if (roomState.phase === 'quiz') {
+    return 'Answer the current quiz question.';
+  }
+
+  return 'Reset the room to play again.';
+};
+
 export const App = () => {
   const roomClient = useRoomClient();
   const currentPlayer = roomClient.roomState?.participants[roomClient.playerId] ?? null;
   const lesson = getLessonDefinition(roomClient.roomState?.lessonId ?? 'molecule-builder');
-  const logFeed = useDeferredValue([...(roomClient.roomState?.diagnostics ?? []), ...roomClient.localLogs].sort((left, right) => right.timestamp - left.timestamp));
+  const logFeed = useDeferredValue(
+    [...(roomClient.roomState?.diagnostics ?? []), ...roomClient.localLogs].sort(
+      (left, right) => right.timestamp - left.timestamp,
+    ),
+  );
+  const connectedPlayers = getConnectedPlayerCount(roomClient.roomState);
+  const visiblePlayerCount = connectedPlayers || 1;
+  const alignedPlayers = getAlignedPlayerCount(roomClient.roomState);
+  const nextStep = getNextStep(roomClient.roomState, currentPlayer);
 
   return (
     <div className="app-shell">
       <header className="hero">
         <div>
           <p className="eyebrow">RoomLab</p>
-          <h1>Co-located molecule learning for multiplayer Spectacles-style XR</h1>
-          <p className="hero-copy">
-            RoomLab is a shared spatial learning prototype where nearby learners align into the same coordinate space,
-            assemble molecules together, and answer synchronized reinforcement prompts in real time.
-          </p>
+          <h1>Build molecules without the wall of text.</h1>
+          <p className="hero-copy">Start a room, line up, then drag atoms into place. Works solo or with extra tabs.</p>
         </div>
 
         <div className="hero-badges">
-          <span className="hero-badge">2 to 4 players</span>
-          <span className="hero-badge">Shared spatial anchor</span>
-          <span className="hero-badge">Authoritative room state</span>
-          <span className="hero-badge">{roomClient.transportMode === 'browser' ? 'Vercel-safe browser transport' : 'Relay transport'}</span>
+          <span className="hero-badge">{roomClient.transportMode === 'browser' ? 'Browser mode' : 'Relay mode'}</span>
+          <span className="hero-badge">
+            {visiblePlayerCount} player{visiblePlayerCount === 1 ? '' : 's'}
+          </span>
+          <span className="hero-badge">{alignedPlayers}/{visiblePlayerCount} aligned</span>
           <span className="hero-badge">{lesson.title}</span>
         </div>
       </header>
 
-      <main className="layout-grid">
-        <div className="left-column">
+      <main className="app-grid">
+        <aside className="sidebar-column">
           <SessionPanel
             roomState={roomClient.roomState}
             currentPlayer={currentPlayer}
@@ -65,9 +125,36 @@ export const App = () => {
             onConfirmAlignment={roomClient.confirmAlignment}
             onSpawnLesson={roomClient.spawnLesson}
           />
-        </div>
+        </aside>
 
-        <div className="center-column">
+        <div className="content-column">
+          <section className="panel overview-panel">
+            <div className="panel-heading">
+              <p className="eyebrow">Overview</p>
+              <h2>Next step</h2>
+            </div>
+            <p className="overview-copy">{nextStep}</p>
+
+            <div className="stat-grid">
+              <div className="stat-card">
+                <span className="meta-label">Room</span>
+                <strong>{roomClient.roomState?.roomId ?? roomClient.roomId}</strong>
+              </div>
+              <div className="stat-card">
+                <span className="meta-label">Phase</span>
+                <strong>{roomClient.roomState?.phase ?? 'setup'}</strong>
+              </div>
+              <div className="stat-card">
+                <span className="meta-label">Players</span>
+                <strong>{visiblePlayerCount}</strong>
+              </div>
+              <div className="stat-card">
+                <span className="meta-label">Score</span>
+                <strong>{roomClient.roomState?.score.teamScore ?? 0}</strong>
+              </div>
+            </div>
+          </section>
+
           <SpatialWorkspace
             roomState={roomClient.roomState}
             currentPlayer={currentPlayer}
@@ -77,37 +164,20 @@ export const App = () => {
             onRelease={roomClient.releaseAtom}
           />
 
-          <div className="panel panel-summary">
-            <div className="panel-heading">
-              <p className="eyebrow">Lesson design</p>
-              <h2>Why this feels educational, not gamey</h2>
-            </div>
-            <div className="summary-grid">
-              <div>
-                <strong>Scaffolded sequence</strong>
-                <p>Water introduces bent geometry, carbon dioxide reinforces linearity, and methane ends with a four-bond tetrahedral arrangement.</p>
-              </div>
-              <div>
-                <strong>Immediate feedback</strong>
-                <p>Correct placement snaps into a shared model, completion reveals a quick fact, and the synchronized quiz checks understanding right away.</p>
-              </div>
-              <div>
-                <strong>Collaborative reasoning</strong>
-                <p>Players can talk through which atom belongs at the center, who should hold which object, and why the geometry matters.</p>
-              </div>
+          <div className="support-grid">
+            <QuizPanel
+              roomState={roomClient.roomState}
+              currentPlayer={currentPlayer}
+              onStartQuiz={roomClient.startQuiz}
+              onSubmit={roomClient.submitQuiz}
+            />
+
+            <div className="support-stack">
+              <ScoreboardPanel roomState={roomClient.roomState} />
+              <PresencePanel roomState={roomClient.roomState} currentPlayer={currentPlayer} />
             </div>
           </div>
-        </div>
 
-        <div className="right-column">
-          <ScoreboardPanel roomState={roomClient.roomState} />
-          <PresencePanel roomState={roomClient.roomState} currentPlayer={currentPlayer} />
-          <QuizPanel
-            roomState={roomClient.roomState}
-            currentPlayer={currentPlayer}
-            onStartQuiz={roomClient.startQuiz}
-            onSubmit={roomClient.submitQuiz}
-          />
           <EventFeed logs={logFeed} />
         </div>
       </main>

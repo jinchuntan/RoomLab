@@ -20,9 +20,9 @@ export const AlignmentPanel = ({
       <section className="panel">
         <div className="panel-heading">
           <p className="eyebrow">Co-location</p>
-          <h2>Shared-origin alignment</h2>
+          <h2>Line up</h2>
         </div>
-        <p className="muted-text">Create or join a room to begin the co-located alignment flow.</p>
+        <p className="muted-text">Create or join a room first.</p>
       </section>
     );
   }
@@ -31,36 +31,53 @@ export const AlignmentPanel = ({
   const canEstablishOrigin = currentPlayer.isHost && !sharedOriginEstablished;
   const canConfirmAlignment = sharedOriginEstablished && currentPlayer.alignment.status !== 'aligned';
   const canSpawnLesson = currentPlayer.isHost && roomState.phase === 'lessonIntro';
+  const connectedCount = roomState.participantOrder.filter(
+    (participantId) => roomState.participants[participantId]?.presence.connectionStatus !== 'disconnected',
+  ).length;
+  const alignedCount = roomState.participantOrder.filter(
+    (participantId) =>
+      roomState.participants[participantId]?.presence.connectionStatus !== 'disconnected' &&
+      roomState.participants[participantId]?.alignment.status === 'aligned',
+  ).length;
+  const nextAction = canEstablishOrigin
+    ? 'Place the shared origin.'
+    : canConfirmAlignment
+      ? 'Confirm your alignment.'
+      : canSpawnLesson
+        ? 'Everyone is aligned. Start the molecule.'
+        : roomState.coLocation.statusMessage;
 
   return (
     <section className="panel">
       <div className="panel-heading">
         <p className="eyebrow">Co-location</p>
-        <h2>Nearby-host alignment flow</h2>
+        <h2>Line up</h2>
       </div>
 
-      <p className="muted-text">{roomState.coLocation.statusMessage}</p>
+      <p className="muted-text">{nextAction}</p>
 
       <div className="alignment-card">
         <p className="alignment-label">Shared origin</p>
-        <strong>{sharedOriginEstablished ? 'Established' : 'Waiting for host'}</strong>
-        <span>{roomState.coLocation.sharedOrigin.nearbyUserAssumption}</span>
+        <strong>{sharedOriginEstablished ? 'Ready' : 'Waiting for host'}</strong>
+        <span>
+          {alignedCount}/{connectedCount} aligned
+        </span>
       </div>
 
       <div className="button-row">
         {canEstablishOrigin ? (
           <button className="primary-button" onClick={onEstablishSharedOrigin}>
-            Establish shared origin
+            Establish origin
           </button>
         ) : null}
         {canConfirmAlignment ? (
           <button className="secondary-button" onClick={onConfirmAlignment}>
-            Confirm nearby alignment
+            Confirm alignment
           </button>
         ) : null}
         {canSpawnLesson ? (
           <button className="primary-button" onClick={onSpawnLesson}>
-            Spawn lesson
+            Start molecule
           </button>
         ) : null}
       </div>
@@ -81,7 +98,6 @@ export const AlignmentPanel = ({
               <div className="participant-tags">
                 <span className="mini-pill">{participant.alignment.status}</span>
                 <span className="mini-pill">{participant.alignment.confidence}</span>
-                <span className="mini-pill">{participant.presence.connectionStatus}</span>
               </div>
             </div>
           );

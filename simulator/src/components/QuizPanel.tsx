@@ -15,9 +15,9 @@ export const QuizPanel = ({ roomState, currentPlayer, onStartQuiz, onSubmit }: Q
       <section className="panel">
         <div className="panel-heading">
           <p className="eyebrow">Quiz</p>
-          <h2>Learning reinforcement</h2>
+          <h2>Answer together</h2>
         </div>
-        <p className="muted-text">The synchronized quiz appears after a molecule is assembled.</p>
+        <p className="muted-text">The quiz unlocks after you finish a molecule.</p>
       </section>
     );
   }
@@ -27,26 +27,24 @@ export const QuizPanel = ({ roomState, currentPlayer, onStartQuiz, onSubmit }: Q
       <section className="panel">
         <div className="panel-heading">
           <p className="eyebrow">Quiz</p>
-          <h2>Learning reinforcement</h2>
+          <h2>Answer together</h2>
         </div>
 
         {roomState.phase === 'roundComplete' && activeChallengeStatus === 'assembled' ? (
           <>
-            <p className="muted-text">
-              The team has assembled the molecule. Start the shared quiz to reinforce geometry, bond count, and application.
-            </p>
+            <p className="muted-text">The molecule is complete. Start the quiz when you are ready.</p>
             {currentPlayer.isHost ? (
               <button className="primary-button" onClick={onStartQuiz}>
-                Start synchronized quiz
+                Start quiz
               </button>
             ) : (
               <p className="muted-text">Waiting for the host to start the quiz.</p>
             )}
           </>
         ) : roomState.phase === 'completed' ? (
-          <p className="muted-text">All starter challenges are complete. Reset the room to replay the lesson.</p>
+          <p className="muted-text">Lesson complete. Reset the room to play again.</p>
         ) : (
-          <p className="muted-text">Build the active molecule to unlock the quiz stage.</p>
+          <p className="muted-text">Finish the current molecule to unlock the quiz.</p>
         )}
       </section>
     );
@@ -58,12 +56,13 @@ export const QuizPanel = ({ roomState, currentPlayer, onStartQuiz, onSubmit }: Q
       <section className="panel">
         <div className="panel-heading">
           <p className="eyebrow">Quiz</p>
-          <h2>Waiting for synchronized question</h2>
+          <h2>Waiting for question</h2>
         </div>
-        <p className="muted-text">Quiz state is active, but the current question has not been hydrated yet.</p>
+        <p className="muted-text">The quiz is active, but the current question has not loaded yet.</p>
       </section>
     );
   }
+
   const submissions = roomState.quiz.submissionsByQuestion[question.id] ?? {};
   const alreadyAnswered = Boolean(submissions[currentPlayer.id]);
   const everyoneAnswered = roomState.participantOrder.every((participantId) => {
@@ -76,6 +75,12 @@ export const QuizPanel = ({ roomState, currentPlayer, onStartQuiz, onSubmit }: Q
       <div className="panel-heading">
         <p className="eyebrow">Quiz</p>
         <h2>{question.promptShort}</h2>
+      </div>
+
+      <div className="status-strip">
+        <span className="status-pill">
+          Question {roomState.quiz.currentQuestionIndex + 1}/{roomState.quiz.questions.length}
+        </span>
       </div>
 
       <p className="quiz-prompt">{question.prompt}</p>
@@ -99,8 +104,8 @@ export const QuizPanel = ({ roomState, currentPlayer, onStartQuiz, onSubmit }: Q
         {alreadyAnswered
           ? everyoneAnswered
             ? question.explanation
-            : 'Answer submitted. Waiting for the rest of the group.'
-          : 'Each participant submits one synchronized answer per question.'}
+            : 'Answer locked in. Waiting for everyone else.'
+          : 'Pick one answer.'}
       </p>
     </section>
   );

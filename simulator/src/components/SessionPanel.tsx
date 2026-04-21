@@ -42,13 +42,21 @@ export const SessionPanel = ({
 }: SessionPanelProps) => {
   const isConnectedToRoom = Boolean(roomState);
   const usesBrowserTransport = transportMode === 'browser';
+  const readyActionDisabled = !roomState || (roomState.phase !== 'lobby' && roomState.phase !== 'alignment');
+  const readyActionLabel = currentPlayer?.ready ? 'Marked ready' : 'Mark ready';
 
   return (
     <section className="panel panel-strong">
       <div className="panel-heading">
         <p className="eyebrow">Session</p>
-        <h2>Host, join, and align nearby learners</h2>
+        <h2>Start a room</h2>
       </div>
+
+      <p className="muted-text">
+        {usesBrowserTransport
+          ? 'Browser mode works in one tab and also syncs across extra tabs on the same link.'
+          : 'Relay mode connects through your WebSocket server for multi-device sessions.'}
+      </p>
 
       <div className="field-grid">
         <label className="field">
@@ -59,8 +67,8 @@ export const SessionPanel = ({
         <label className="field">
           <span>Transport</span>
           <select value={transportMode} onChange={(event) => onTransportModeChange(event.target.value as TransportMode)}>
-            <option value="browser">Browser shared demo</option>
-            <option value="relay">External relay</option>
+            <option value="browser">Browser</option>
+            <option value="relay">Relay</option>
           </select>
         </label>
 
@@ -79,10 +87,10 @@ export const SessionPanel = ({
 
       <div className="button-row">
         <button className="primary-button" onClick={() => void onHost()} disabled={connectionStatus === 'connecting'}>
-          Host room
+          Host
         </button>
         <button className="secondary-button" onClick={() => void onJoin()} disabled={connectionStatus === 'connecting'}>
-          Join room
+          Join
         </button>
         <button className="ghost-button" onClick={onResync} disabled={!isConnectedToRoom}>
           Resync
@@ -91,55 +99,40 @@ export const SessionPanel = ({
 
       <div className="status-strip">
         <span className={`status-pill status-${connectionStatus}`}>{connectionStatus}</span>
-        <span className="status-pill">{usesBrowserTransport ? 'browser shared demo' : 'external relay'}</span>
-        <span>{roomState ? `Lesson: ${roomState.lessonId}` : 'Waiting for room state'}</span>
+        <span className="status-pill">{usesBrowserTransport ? 'browser mode' : 'relay mode'}</span>
+        <span className="status-pill">{roomState ? roomState.phase : 'waiting for room'}</span>
       </div>
 
       {connectionError ? <p className="error-text">{connectionError}</p> : null}
 
-      {usesBrowserTransport ? (
-        <p className="muted-text">
-          Browser shared demo is Vercel-safe and works across multiple tabs on the same deployed URL using browser-native shared state.
-        </p>
-      ) : (
-        <p className="muted-text">
-          External relay mode uses the authoritative WebSocket server for stronger multi-device demos. Point this at your hosted relay first.
-        </p>
-      )}
-
-      <div className="instruction-list">
-        <p>1. {usesBrowserTransport ? 'Open a second tab on the same deployment, then host and join the same room.' : 'Host creates a room and invites nearby teammates using the same relay.'}</p>
-        <p>2. Everyone marks ready, then the host establishes a shared origin.</p>
-        <p>3. Guests confirm alignment, build the molecule together, then answer the quiz.</p>
-      </div>
-
       {roomState && currentPlayer ? (
         <div className="session-actions">
-          <label className="toggle-row">
-            <input
-              type="checkbox"
-              checked={currentPlayer.ready}
-              onChange={(event) => onReadyChange(event.target.checked)}
-              disabled={roomState.phase !== 'lobby' && roomState.phase !== 'alignment'}
-            />
-            <span>Ready for shared lesson start</span>
-          </label>
+          <div className="button-row">
+            <button
+              className={currentPlayer.ready ? 'secondary-button' : 'primary-button'}
+              onClick={() => onReadyChange(!currentPlayer.ready)}
+              disabled={readyActionDisabled}
+            >
+              {readyActionLabel}
+            </button>
 
-          {currentPlayer.isHost ? (
-            <div className="button-row">
+            {currentPlayer.isHost ? (
               <button className="secondary-button" onClick={() => onReset(true)}>
                 Reset round
               </button>
+            ) : null}
+
+            {currentPlayer.isHost ? (
               <button className="ghost-button" onClick={() => onReset(false)}>
                 Full reset
               </button>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
 
           <div className="meta-grid">
             <div>
-              <span className="meta-label">Room</span>
-              <strong>{roomState.roomId}</strong>
+              <span className="meta-label">You</span>
+              <strong>{currentPlayer.isHost ? 'Host' : 'Guest'}</strong>
             </div>
             <div>
               <span className="meta-label">Phase</span>

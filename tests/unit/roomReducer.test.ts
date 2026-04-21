@@ -115,6 +115,53 @@ const prepareAlignedWaterRoom = (): RoomState => {
 };
 
 describe('roomReducer', () => {
+  it('lets a single host progress from setup into the first lesson', () => {
+    let state = createSeedRoom();
+
+    state = applyAccepted(
+      state,
+      {
+        type: 'PLAYER_READY',
+        actorId: 'host-player',
+        payload: {
+          roomId: 'lab-101',
+          ready: true,
+        },
+      },
+      1,
+    );
+
+    state = applyAccepted(
+      state,
+      {
+        type: 'SET_SHARED_ORIGIN',
+        actorId: 'host-player',
+        payload: {
+          roomId: 'lab-101',
+          transform: makeTransform(0, 0, 0),
+        },
+      },
+      2,
+    );
+
+    expect(state.phase).toBe('lessonIntro');
+
+    state = applyAccepted(
+      state,
+      {
+        type: 'SPAWN_LESSON',
+        actorId: 'host-player',
+        payload: {
+          roomId: 'lab-101',
+        },
+      },
+      3,
+    );
+
+    expect(state.phase).toBe('building');
+    expect(state.lesson.currentChallengeId).toBe('water-build');
+  });
+
   it('validates a correct H2O assembly and awards shared score', () => {
     let state = prepareAlignedWaterRoom();
 
@@ -301,6 +348,54 @@ describe('roomReducer', () => {
     expect(state.objects['water-build-atom-1']?.ownerId).toBe('guest-player');
   });
 
+  it('returns released atoms to their tray position', () => {
+    let state = prepareAlignedWaterRoom();
+    const trayTransform = state.objects['water-build-atom-1']!.trayTransform;
+
+    state = applyAccepted(
+      state,
+      {
+        type: 'PICKUP_ATOM',
+        actorId: 'host-player',
+        payload: {
+          roomId: 'lab-101',
+          objectId: 'water-build-atom-1',
+        },
+      },
+      7,
+    );
+
+    state = applyAccepted(
+      state,
+      {
+        type: 'MOVE_ATOM',
+        actorId: 'host-player',
+        payload: {
+          roomId: 'lab-101',
+          objectId: 'water-build-atom-1',
+          transform: makeTransform(0.35, 0, 0.18),
+        },
+      },
+      8,
+    );
+
+    state = applyAccepted(
+      state,
+      {
+        type: 'RELEASE_ATOM',
+        actorId: 'host-player',
+        payload: {
+          roomId: 'lab-101',
+          objectId: 'water-build-atom-1',
+        },
+      },
+      9,
+    );
+
+    expect(state.objects['water-build-atom-1']?.lifecycle).toBe('tray');
+    expect(state.objects['water-build-atom-1']?.transform).toEqual(trayTransform);
+  });
+
   it('migrates the host role and marks the departed player disconnected', () => {
     let state = prepareAlignedWaterRoom();
 
@@ -321,6 +416,27 @@ describe('roomReducer', () => {
     expect(state.hostId).toBe('guest-player');
     expect(state.participants['host-player']?.presence.connectionStatus).toBe('disconnected');
     expect(state.participants['guest-player']?.isHost).toBe(true);
+  });
+
+  it('keeps the room playable when one participant remains connected', () => {
+    let state = prepareAlignedWaterRoom();
+
+    state = applyAccepted(
+      state,
+      {
+        type: 'PLAYER_LEFT',
+        actorId: 'guest-player',
+        payload: {
+          roomId: 'lab-101',
+          playerId: 'guest-player',
+          reason: 'disconnect',
+        },
+      },
+      7,
+    );
+
+    expect(state.phase).toBe('building');
+    expect(state.participants['guest-player']?.presence.connectionStatus).toBe('disconnected');
   });
 
   it('marks late joiners for guided re-alignment during an active build', () => {
